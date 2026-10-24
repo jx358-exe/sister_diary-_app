@@ -1,0 +1,9 @@
+# Flutter SDK
+flutter/
+# 编译产物
+sister_app/build/
+sister_app/.dart_tool/
+sister_app/ios/Runner.xcworkspace
+*.log
+# 安装包
+*.deb
