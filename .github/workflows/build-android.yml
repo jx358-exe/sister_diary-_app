@@ -1,29 +1,23 @@
 name: Build Android App
-on: push
+on:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
-
-      - name: Enter project folder & Install dependencies
-        run: |
-          cd sister_app
-          flutter pub get
-
-      - name: Build APK
-        run: |
-          cd sister_app
-          flutter build apk --debug
-
+          flutter-version: stable
+      - name: Get dependencies
+        run: cd sister_app && flutter pub get
+      - name: Build APK(arm64,绝大多数安卓手机)
+        run: cd sister_app && flutter build apk --debug --target-platform android-arm64
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-apk
+          name: SisterDiary-APK
           path: sister_app/build/app/outputs/flutter-apk/app-debug.apk
