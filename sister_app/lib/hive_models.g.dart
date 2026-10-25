@@ -18,10 +18,10 @@ class ScheduleItemAdapter extends TypeAdapter<ScheduleItem> {
     };
     return ScheduleItem(
       dateKey: fields[0] as String,
-      timeRange: fields[1] as String,
-      taskContent: fields[2] as String,
-      voicePath: fields[3] as String?,
-      createAt: fields[4] as DateTime,
+      time: fields[1] as String,
+      title: fields[2] as String,
+      note: fields[3] as String,
+      isDone: fields[4] as bool,
     );
   }
 
@@ -32,13 +32,13 @@ class ScheduleItemAdapter extends TypeAdapter<ScheduleItem> {
       ..writeByte(0)
       ..write(obj.dateKey)
       ..writeByte(1)
-      ..write(obj.timeRange)
+      ..write(obj.time)
       ..writeByte(2)
-      ..write(obj.taskContent)
+      ..write(obj.title)
       ..writeByte(3)
-      ..write(obj.voicePath)
+      ..write(obj.note)
       ..writeByte(4)
-      ..write(obj.createAt);
+      ..write(obj.isDone);
   }
 
   @override
@@ -52,36 +52,33 @@ class ScheduleItemAdapter extends TypeAdapter<ScheduleItem> {
           typeId == other.typeId;
 }
 
-class DiaryItemAdapter extends TypeAdapter<DiaryItem> {
+class DiaryRecordAdapter extends TypeAdapter<DiaryRecord> {
   @override
   final int typeId = 1;
 
   @override
-  DiaryItem read(BinaryReader reader) {
+  DiaryRecord read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return DiaryItem(
-      dateKey: fields[0] as String,
-      content: fields[1] as String,
-      voicePath: fields[2] as String?,
-      createAt: fields[3] as DateTime,
+    return DiaryRecord(
+      dateStr: fields[0] as String,
+      hasRecord: fields[1] as bool,
+      aiSummary: fields[2] as String,
     );
   }
 
   @override
-  void write(BinaryWriter writer, DiaryItem obj) {
+  void write(BinaryWriter writer, DiaryRecord obj) {
     writer
-      ..writeByte(4)
-      ..writeByte(0)
-      ..write(obj.dateKey)
-      ..writeByte(1)
-      ..write(obj.content)
-      ..writeByte(2)
-      ..write(obj.voicePath)
       ..writeByte(3)
-      ..write(obj.createAt);
+      ..writeByte(0)
+      ..write(obj.dateStr)
+      ..writeByte(1)
+      ..write(obj.hasRecord)
+      ..writeByte(2)
+      ..write(obj.aiSummary);
   }
 
   @override
@@ -90,38 +87,38 @@ class DiaryItemAdapter extends TypeAdapter<DiaryItem> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DiaryItemAdapter &&
+      other is DiaryRecordAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
 
-class ChatMessageAdapter extends TypeAdapter<ChatMessage> {
+class GardenDataAdapter extends TypeAdapter<GardenData> {
   @override
   final int typeId = 2;
 
   @override
-  ChatMessage read(BinaryReader reader) {
+  GardenData read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return ChatMessage(
-      isUser: fields[0] as bool,
-      text: fields[1] as String,
-      createAt: fields[2] as DateTime,
+    return GardenData(
+      seedName: fields[0] as String,
+      growthDay: fields[1] as int,
+      hasPlanted: fields[2] as bool,
     );
   }
 
   @override
-  void write(BinaryWriter writer, ChatMessage obj) {
+  void write(BinaryWriter writer, GardenData obj) {
     writer
       ..writeByte(3)
       ..writeByte(0)
-      ..write(obj.isUser)
+      ..write(obj.seedName)
       ..writeByte(1)
-      ..write(obj.text)
+      ..write(obj.growthDay)
       ..writeByte(2)
-      ..write(obj.createAt);
+      ..write(obj.hasPlanted);
   }
 
   @override
@@ -130,106 +127,14 @@ class ChatMessageAdapter extends TypeAdapter<ChatMessage> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ChatMessageAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
-}
-
-class HealthRecordAdapter extends TypeAdapter<HealthRecord> {
-  @override
-  final int typeId = 3;
-
-  @override
-  HealthRecord read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
-    return HealthRecord(
-      dateKey: fields[0] as String,
-      mood: fields[1] as String,
-      sleep: fields[2] as String,
-      water: fields[3] as int,
-      exercise: fields[4] as String,
-      createAt: fields[5] as DateTime,
-    );
-  }
-
-  @override
-  void write(BinaryWriter writer, HealthRecord obj) {
-    writer
-      ..writeByte(6)
-      ..writeByte(0)
-      ..write(obj.dateKey)
-      ..writeByte(1)
-      ..write(obj.mood)
-      ..writeByte(2)
-      ..write(obj.sleep)
-      ..writeByte(3)
-      ..write(obj.water)
-      ..writeByte(4)
-      ..write(obj.exercise)
-      ..writeByte(5)
-      ..write(obj.createAt);
-  }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is HealthRecordAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
-}
-
-class PlanItemAdapter extends TypeAdapter<PlanItem> {
-  @override
-  final int typeId = 4;
-
-  @override
-  PlanItem read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
-    return PlanItem(
-      title: fields[0] as String,
-      detail: fields[1] as String,
-      isFinished: fields[2] as bool,
-      createAt: fields[3] as DateTime,
-    );
-  }
-
-  @override
-  void write(BinaryWriter writer, PlanItem obj) {
-    writer
-      ..writeByte(4)
-      ..writeByte(0)
-      ..write(obj.title)
-      ..writeByte(1)
-      ..write(obj.detail)
-      ..writeByte(2)
-      ..write(obj.isFinished)
-      ..writeByte(3)
-      ..write(obj.createAt);
-  }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PlanItemAdapter &&
+      other is GardenDataAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
 
 class AppSettingAdapter extends TypeAdapter<AppSetting> {
   @override
-  final int typeId = 5;
+  final int typeId = 3;
 
   @override
   AppSetting read(BinaryReader reader) {
@@ -238,22 +143,19 @@ class AppSettingAdapter extends TypeAdapter<AppSetting> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return AppSetting(
-      autoClearVoice: fields[0] as bool,
-      voiceKeepDays: fields[1] as int,
-      themeMode: fields[2] as String,
+      themeIndex: fields[0] as int,
+      userId: fields[1] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSetting obj) {
     writer
-      ..writeByte(3)
-      ..writeByte(0)
-      ..write(obj.autoClearVoice)
-      ..writeByte(1)
-      ..write(obj.voiceKeepDays)
       ..writeByte(2)
-      ..write(obj.themeMode);
+      ..writeByte(0)
+      ..write(obj.themeIndex)
+      ..writeByte(1)
+      ..write(obj.userId);
   }
 
   @override
