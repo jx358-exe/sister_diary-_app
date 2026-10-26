@@ -130,7 +130,7 @@ app.add_middleware(
 class ScheduleInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str = Field(min_length=1, max_length=200)
+    title: str = Field(default="", max_length=200)
     time: str = Field(default="", max_length=80)
     note: str = Field(default="", max_length=5000)
     isDone: bool = False
@@ -140,15 +140,13 @@ class ScheduleInput(BaseModel):
     @classmethod
     def title_must_not_be_blank(cls, value: str) -> str:
         value = value.strip()
-        if not value:
-            raise ValueError("title must not be blank")
         return value
 
 
 class SchedulePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str | None = Field(default=None, min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
     time: str | None = Field(default=None, max_length=80)
     note: str | None = Field(default=None, max_length=5000)
     isDone: bool | None = None
@@ -191,6 +189,7 @@ class ChangePasswordInput(BaseModel):
 class DailyRecordInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     diaryText: str = Field(default="", max_length=20000)
+    aiSummary: str = Field(default="", max_length=10000)
     chatText: str = Field(default="", max_length=20000)
     healthAnalysis: str = Field(default="", max_length=20000)
     healthAdvice: str = Field(default="", max_length=20000)
@@ -206,15 +205,29 @@ class GardenStateInput(BaseModel):
 
 class SharingMomentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    text: str = Field(min_length=1, max_length=5000)
+    text: str = Field(default="", max_length=5000)
+    images: list[str] = Field(default_factory=list, max_length=9)
 
     @field_validator("text")
     @classmethod
-    def share_text_not_blank(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("share text must not be blank")
-        return value
+    def trim_share_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("images")
+    @classmethod
+    def validate_share_images(cls, values: list[str]) -> list[str]:
+        total_bytes = 0
+        for value in values:
+            match = re.fullmatch(r"data:image/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)", value)
+            if not match:
+                raise ValueError("Images must be JPEG, PNG, or WebP data URLs")
+            try:
+                total_bytes += len(base64.b64decode(match.group(1), validate=True))
+            except Exception as exc:
+                raise ValueError("Invalid image data") from exc
+            if total_bytes > 5 * 1024 * 1024:
+                raise ValueError("Total image size must be under 5 MB")
+        return values
 
 
 class AIChatTurn(BaseModel):
@@ -823,10 +836,10 @@ async def get_daily_record(
         {"userId": user["userId"], "dateKey": date_key}, {"_id": 0}
     )
     if record is None:
-        return {"date": date_key, "diaryText": "", "chatText": "",
+        return {"date": date_key, "diaryText": "", "aiSummary": "", "chatText": "",
                 "healthAnalysis": "", "healthAdvice": ""}
     return {key: record.get(key, "") for key in
-            ("date", "diaryText", "chatText", "healthAnalysis", "healthAdvice")}
+            ("date", "diaryText", "aiSummary", "chatText", "healthAnalysis", "healthAdvice")}
 
 
 @app.put("/api/daily-records/{date_key}")
@@ -850,7 +863,7 @@ async def put_daily_record(
         {"$set": document, "$setOnInsert": {"createdAt": now}}, upsert=True,
     )
     return {key: document[key] for key in
-            ("date", "diaryText", "chatText", "healthAnalysis", "healthAdvice")}
+            ("date", "diaryText", "aiSummary", "chatText", "healthAnalysis", "healthAdvice")}
 
 
 @app.delete("/api/daily-records/{date_key}", status_code=status.HTTP_204_NO_CONTENT)
@@ -946,15 +959,17 @@ async def create_sharing_moment(
     request: Request,
     user: dict = Depends(require_user),
 ):
+    if not body.text and not body.images:
+        raise HTTPException(status_code=422, detail="Add text or an image to share")
     now = datetime.now(timezone.utc)
     item = {
         "userId": user["userId"], "username": user.get("username", "Sister"),
-        "text": body.text, "createdAt": now,
+        "text": body.text, "images": body.images, "createdAt": now,
         "expiresAt": now + timedelta(days=5),
     }
     await request.app.state.database.sharingMoments.insert_one(item)
     return {"username": item["username"], "text": item["text"],
-            "createdAt": now.isoformat(), "expiresInDays": 5}
+            "images": item["images"], "createdAt": now.isoformat(), "expiresInDays": 5}
 
 
 @app.post("/api/profile/avatar")
@@ -1040,9 +1055,20 @@ async def list_friends(
                                          {"_id": 0, "email": 0, "phone": 0, "avatarData": 0})
         if friend:
             friends.append(friend)
-    incoming = [doc async for doc in db.friendRequests.find(
-        {"toUserId": user["userId"], "status": "pending"}, {"_id": 0}
-    )]
+    incoming = []
+    async for request_doc in db.friendRequests.find(
+        {"toUserId": user["userId"], "status": "pending"}
+    ).sort("createdAt", -1):
+        sender = await db.users.find_one(
+            {"userId": request_doc["fromUserId"]},
+            {"_id": 0, "email": 0, "phone": 0, "avatarData": 0},
+        )
+        incoming.append({
+            "requestId": str(request_doc["_id"]),
+            "userId": request_doc["fromUserId"],
+            "username": sender.get("username", "Sister") if sender else "Sister",
+            "createdAt": request_doc["createdAt"].isoformat(),
+        })
     return {"friends": friends, "incomingRequests": incoming,
             "friendCount": user.get("friendCount", 0),
             "friendLimit": user.get("friendLimit", 20)}
@@ -1070,6 +1096,23 @@ async def create_friend_request(
     except Exception as exc:
         raise HTTPException(status_code=409, detail="Friend request already pending") from exc
     return {"status": "pending"}
+
+
+@app.post("/api/friend-requests/{request_id}/reject")
+async def reject_friend_request(
+    request_id: str,
+    request: Request,
+    user: dict = Depends(require_user),
+):
+    if not ObjectId.is_valid(request_id):
+        raise HTTPException(status_code=400, detail="Invalid request id")
+    result = await request.app.state.database.friendRequests.update_one(
+        {"_id": ObjectId(request_id), "toUserId": user["userId"], "status": "pending"},
+        {"$set": {"status": "rejected", "rejectedAt": datetime.now(timezone.utc)}},
+    )
+    if result.modified_count != 1:
+        raise HTTPException(status_code=404, detail="Friend request not found")
+    return {"status": "rejected"}
 
 
 @app.post("/api/friend-requests/{request_id}/accept")
