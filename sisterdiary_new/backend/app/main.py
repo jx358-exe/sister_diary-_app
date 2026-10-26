@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
     await app.state.database.users.create_index("email", unique=True, sparse=True)
     await app.state.database.users.create_index("phone", unique=True, sparse=True)
     await app.state.database.users.create_index("userId", unique=True)
+    await app.state.database.users.create_index("guestInstallId", unique=True, sparse=True)
     await app.state.database.friendRequests.create_index(
         [("fromUserId", ASCENDING), ("toUserId", ASCENDING), ("status", ASCENDING)],
         unique=True,
@@ -430,6 +431,44 @@ def _check_user_scope(user: dict, requested_user_id: str | None) -> str:
     if requested_user_id and requested_user_id != user_id:
         raise HTTPException(status_code=403, detail="Account scope mismatch")
     return user_id
+
+
+@app.post("/api/auth/guest")
+async def create_guest_session(body: dict, request: Request):
+    install_id = body.get("installId")
+    if not isinstance(install_id, str) or not re.fullmatch(r"[a-f0-9]{32,64}", install_id):
+        raise HTTPException(status_code=422, detail="Invalid installation ID")
+
+    now = datetime.now(timezone.utc)
+    users = request.app.state.database.users
+    user = await users.find_one({"guestInstallId": install_id})
+    if user is None:
+        user = {
+            "userId": f"GUEST{secrets.token_hex(8).upper()}",
+            "guestInstallId": install_id,
+            "username": "访客",
+            "avatarId": "flower_rose",
+            "avatarChanges": [],
+            "planTier": "free",
+            "friendLimit": 20,
+            "createdAt": now,
+            "isGuest": True,
+        }
+        try:
+            await users.insert_one(user)
+        except Exception:
+            user = await users.find_one({"guestInstallId": install_id})
+            if user is None:
+                raise HTTPException(status_code=409, detail="Could not create guest session")
+
+    token = secrets.token_urlsafe(32)
+    await request.app.state.database.sessions.insert_one({
+        "tokenHash": hashlib.sha256(token.encode()).hexdigest(),
+        "userId": user["userId"],
+        "createdAt": now,
+        "expiresAt": now + timedelta(days=30),
+    })
+    return _user_response(user, token)
 
 
 def _user_response(user: dict, token: str) -> dict:

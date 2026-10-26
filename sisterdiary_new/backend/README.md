@@ -26,7 +26,7 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 
 For Android Emulator, use `http://10.0.2.2:8000`; for a physical phone, use the computer's LAN IP and allow that origin in `CORS_ORIGINS`.
 
-Users register with a verified email or international-format phone number, a username, and a password of at least 10 characters. The API generates a permanent unique user ID and stores passwords as salted PBKDF2 hashes. Later sign-ins use the email/phone and password. Bearer sessions expire after 30 days; password changes and sign-out are handled by the API.
+The app now creates an isolated guest account automatically on first launch, so local and cloud features do not require email or SMS verification. Each installation keeps its own guest data. Guest sessions expire after 30 days and can be renewed with the same installation ID. Email/phone registration and password sign-in remain available for a later account flow; those registration channels require SMTP/Twilio configuration.
 
 Retention: schedules, My Plan items, and date-linked diary/chat/health records expire after 60 days by default. The storage screen lets the user manually clean My Schedule-linked data or My Plan independently, using 15-, 30-, or 60-day age limits. Sharing Moment text expires after 5 days; garden state expires 30 days after its last update.
 
@@ -36,8 +36,13 @@ Chat history is saved with the selected date. Health analysis uses that date's M
 
 ## Android app
 
-The Android app asks for the backend server root URL on the account screen; it can also be changed from Settings. Enter the deployed backend's HTTPS URL, not the MongoDB URL or model provider URL. For an Android Emulator on the development computer, `http://10.0.2.2:8000` reaches a local backend. A physical phone needs a reachable HTTPS deployment or a computer LAN address. Keep API keys and MongoDB credentials on the backend.
+Android release builds default to the deployed Render API (`https://sister-diary-api.onrender.com`). The server root URL can still be changed from the account screen or Settings. Enter the deployed backend's HTTPS URL, not the MongoDB URL or model provider URL. For an Android Emulator on the development computer, `http://10.0.2.2:8000` reaches a local backend. A physical phone needs a reachable HTTPS deployment or a computer LAN address. Keep API keys and MongoDB credentials on the backend.
 
-Build an installable APK from the project root with `flutter build apk --release`. The APK is signed with the local debug certificate until a production signing key is configured.
+Build an installable APK from the Flutter project root with `flutter build apk --release`. To override the default backend URL, pass `--dart-define=API_BASE_URL=https://your-api.example.com`. The APK is signed with the local debug certificate until a production signing key is configured.
 
-SMTP and Twilio credentials are server-only environment variables. Do not commit `.env`, publish real credentials, or put the MongoDB URI in Flutter. Rotate any credential that has been exposed. Account, verification and session flows need provider credentials before end-to-end signup can work.
+SMTP and Twilio credentials are server-only environment variables. Set these on Render under the service's Environment page before enabling sign-up:
+
+- Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`.
+- SMS (optional): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`.
+
+Email or SMS registration returns a clear `503` until that channel is configured. Do not commit `.env`, publish real credentials, or put MongoDB or AI credentials in Flutter. Rotate any credential that has been exposed.
